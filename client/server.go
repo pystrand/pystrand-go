@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -52,7 +51,6 @@ func NewWebSocketServer(
 }
 
 func (s *WebSocketServer) Start(port string) {
-	fmt.Println("Starting WebSocket server on port", port)
 	http.HandleFunc("/ws/", s.HandleConnection)
 	http.ListenAndServe(port, nil)
 }

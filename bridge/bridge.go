@@ -2,18 +2,25 @@
 package bridge
 
 import (
+	"log"
 	"net/http"
+	"strconv"
 
-	"github.com/pystrand/pystrand-server/backend"
-	"github.com/pystrand/pystrand-server/client"
+	"github.com/pystrand/pystrand-go/backend"
+	"github.com/pystrand/pystrand-go/client"
+	"github.com/pystrand/pystrand-go/config"
 )
 
 type Bridge struct {
 	_backend  *backend.TCPServer
 	webSocket *client.WebSocketServer
+	config    *config.Config
 }
 
 func NewBridge() *Bridge {
+	// Load configuration
+	cfg := config.LoadConfig()
+
 	_backend := backend.NewTCPServer()
 	_backend.WebsocketActions = make(map[backend.ServerActions]func(map[string]any))
 
@@ -50,12 +57,23 @@ func NewBridge() *Bridge {
 	return &Bridge{
 		_backend:  _backend,
 		webSocket: webSocket,
+		config:    cfg,
 	}
 }
 
 func (b *Bridge) Start() {
-	b._backend.Start(":8081")
-	b.webSocket.Start(":8080")
+	// Start TCP server
+	tcpAddr := ":" + strconv.Itoa(b.config.TCPPort)
+	if err := b._backend.Start(tcpAddr); err != nil {
+		log.Printf("Error starting TCP server: %v\n", err)
+		return
+	}
+	log.Printf("TCP server started on port %d\n", b.config.TCPPort)
+
+	// Start WebSocket server
+	wsAddr := ":" + strconv.Itoa(b.config.WebSocketPort)
+	b.webSocket.Start(wsAddr)
+	log.Printf("WebSocket server started on port %d\n", b.config.WebSocketPort)
 }
 
 func (b *Bridge) Stop() {

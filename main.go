@@ -4,7 +4,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/pystrand/pystrand-server/bridge"
+	"github.com/pystrand/pystrand-go/bridge"
 )
 
 func main() {
