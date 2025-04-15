@@ -29,11 +29,21 @@ func NewBridge() *Bridge {
 	}
 
 	onMessage := func(_client client.Client, message []byte) {
-		_backend.HandleMessage(_client.MetaData, message)
+		clientData := map[string]any{
+			"client_id": _client.ClientID,
+			"room_id":   _client.RoomID,
+			"metaData":  _client.MetaData,
+		}
+		_backend.HandleMessage(clientData, message)
 	}
 
 	onDisconnect := func(_client client.Client) {
-		_backend.HandleDisconnect(_client.MetaData)
+		clientData := map[string]any{
+			"client_id": _client.ClientID,
+			"room_id":   _client.RoomID,
+			"metaData":  _client.MetaData,
+		}
+		_backend.HandleDisconnect(clientData)
 	}
 
 	webSocket := client.NewWebSocketServer(

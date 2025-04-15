@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
@@ -11,6 +12,7 @@ type Client struct {
 	Conn     *websocket.Conn
 	MetaData map[string]any
 	RoomID   string
+	ClientID string
 }
 
 type Room struct {
@@ -22,7 +24,7 @@ type Room struct {
 type WebSocketServer struct {
 	upgrader        websocket.Upgrader
 	rooms           map[string]*Room
-	clients         map[*websocket.Conn]*Client
+	clients         map[string]*Client
 	onNewConnection func(r *http.Request) (map[string]any, error)
 	onMessage       func(_client Client, message []byte)
 	onDisconnect    func(_client Client)
@@ -43,7 +45,7 @@ func NewWebSocketServer(
 			},
 		},
 		rooms:           make(map[string]*Room),
-		clients:         make(map[*websocket.Conn]*Client),
+		clients:         make(map[string]*Client),
 		onNewConnection: onNewConnection,
 		onMessage:       onMessage,
 		onDisconnect:    onDisconnect,
@@ -56,8 +58,8 @@ func (s *WebSocketServer) Start(port string) {
 }
 
 func (s *WebSocketServer) Stop() {
-	for conn := range s.clients {
-		conn.Close()
+	for _, client := range s.clients {
+		client.Conn.Close()
 	}
 }
 
@@ -97,9 +99,10 @@ func (s *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reques
 		Conn:     conn,
 		MetaData: metaData,
 		RoomID:   roomID,
+		ClientID: metaData["clientID"].(string),
 	}
-	s.clients[conn] = client
-	room.clients[metaData["clientID"].(string)] = client
+	s.clients[client.ClientID] = client
+	room.clients[client.ClientID] = client
 
 	log.Printf("New client connected. Total clients: %d", len(s.clients))
 
@@ -108,7 +111,7 @@ func (s *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reques
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			log.Printf("Error reading message: %v", err)
-			s.handleDisconnect(conn)
+			s.handleDisconnect(client.ClientID)
 			return
 		}
 
@@ -118,29 +121,34 @@ func (s *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reques
 }
 
 // handleDisconnect handles client disconnection
-func (s *WebSocketServer) handleDisconnect(conn *websocket.Conn) {
-	client := s.clients[conn]
+func (s *WebSocketServer) handleDisconnect(clientID string) {
+	client := s.clients[clientID]
 	if client != nil {
 		s.onDisconnect(*client)
-		delete(s.clients, conn)
+		delete(s.clients, client.ClientID)
 		log.Printf("Client disconnected. Total clients: %d", len(s.clients))
-		conn.Close()
+		client.Conn.Close()
 	}
 }
 
 // BroadcastMessage sends a message to all connected clients
 func (s *WebSocketServer) BroadcastMessage(message []byte) {
-	for client := range s.clients {
-		err := client.WriteMessage(websocket.TextMessage, message)
+	for _, client := range s.clients {
+		err := client.Conn.WriteMessage(websocket.TextMessage, message)
 		if err != nil {
 			log.Printf("Error broadcasting message: %v", err)
-			client.Close()
-			delete(s.clients, client)
+			client.Conn.Close()
+			delete(s.clients, client.ClientID)
 		}
 	}
 }
 
 // SendMessage sends a message to a specific client
-func (s *WebSocketServer) SendMessage(conn *websocket.Conn, message []byte) error {
-	return conn.WriteMessage(websocket.TextMessage, message)
+func (s *WebSocketServer) SendMessage(clientID string, message []byte) error {
+	client := s.clients[clientID]
+	if client == nil {
+		log.Printf("client not found")
+		return errors.New("client not found")
+	}
+	return client.Conn.WriteMessage(websocket.TextMessage, message)
 }
