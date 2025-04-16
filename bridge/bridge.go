@@ -54,10 +54,12 @@ func NewBridge() *Bridge {
 
 	// add a new action to the backend
 	_backend.WebsocketActions[backend.ServerActionMessageToRoom] = func(params map[string]any) {
-		webSocket.MessageToRoom(params["room_id"].(string), params["message"].([]byte))
+		message := params["message"].(string)
+		webSocket.MessageToRoom(params["room_id"].(string), []byte(message))
 	}
 	_backend.WebsocketActions[backend.ServerActionMessageToConnection] = func(params map[string]any) {
-		webSocket.MessageToConnection(params["conn_id"].(string), params["message"].([]byte))
+		message := params["message"].(string)
+		webSocket.MessageToConnection(params["conn_id"].(string), []byte(message))
 	}
 	_backend.WebsocketActions[backend.ServerActionBroadcastMessage] = func(params map[string]any) {
 		message := params["message"].(string)

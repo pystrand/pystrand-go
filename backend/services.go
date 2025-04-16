@@ -52,7 +52,7 @@ func (s *TCPServer) HandleMessage(metaData map[string]any, message []byte) {
 	s.sendMessage(BackendRequest{
 		RequestID: requestID,
 		Action:    BackendActionNewMessage,
-		Params:    map[string]any{"message": message, "metaData": metaData},
+		Params:    map[string]any{"message": string(message), "metaData": metaData},
 	})
 }
 
