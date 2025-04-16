@@ -22,17 +22,19 @@ type Room struct {
 
 // WebSocketServer represents the WebSocket server
 type WebSocketServer struct {
-	upgrader        websocket.Upgrader
-	rooms           map[string]*Room
-	clients         map[string]*Client
-	onNewConnection func(r *http.Request) (map[string]any, error)
-	onMessage       func(_client Client, message []byte)
-	onDisconnect    func(_client Client)
+	upgrader            websocket.Upgrader
+	rooms               map[string]*Room
+	clients             map[string]*Client
+	onConnectionRequest func(r *http.Request) (map[string]any, error)
+	onConnectionSuccess func(_client Client) (map[string]any, error)
+	onMessage           func(_client Client, message []byte)
+	onDisconnect        func(_client Client)
 }
 
 // NewWebSocketServer creates a new WebSocket server instance
 func NewWebSocketServer(
-	onNewConnection func(r *http.Request) (map[string]any, error),
+	onConnectionRequest func(r *http.Request) (map[string]any, error),
+	onConnectionSuccess func(_client Client) (map[string]any, error),
 	onMessage func(_client Client, message []byte),
 	onDisconnect func(_client Client),
 ) *WebSocketServer {
@@ -44,11 +46,12 @@ func NewWebSocketServer(
 				return true
 			},
 		},
-		rooms:           make(map[string]*Room),
-		clients:         make(map[string]*Client),
-		onNewConnection: onNewConnection,
-		onMessage:       onMessage,
-		onDisconnect:    onDisconnect,
+		rooms:               make(map[string]*Room),
+		clients:             make(map[string]*Client),
+		onConnectionRequest: onConnectionRequest,
+		onConnectionSuccess: onConnectionSuccess,
+		onMessage:           onMessage,
+		onDisconnect:        onDisconnect,
 	}
 }
 
@@ -65,9 +68,9 @@ func (s *WebSocketServer) Stop() {
 
 // HandleConnection handles new WebSocket connections
 func (s *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Request) {
-	metaData, err := s.onNewConnection(r)
+	metaData, err := s.onConnectionRequest(r)
 	if err != nil {
-		log.Printf("Failed to handle new connection: %v", err)
+		log.Printf("Failed to handle new connection request: %v", err)
 		return
 	}
 
@@ -83,7 +86,7 @@ func (s *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	roomID := metaData["roomID"].(string)
+	roomID := metaData["room_id"].(string)
 
 	room, ok := s.rooms[roomID]
 	if !ok {
@@ -99,12 +102,21 @@ func (s *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reques
 		Conn:     conn,
 		MetaData: metaData,
 		RoomID:   roomID,
-		ClientID: metaData["clientID"].(string),
+		ClientID: metaData["client_id"].(string),
 	}
 	s.clients[client.ClientID] = client
 	room.clients[client.ClientID] = client
 
 	log.Printf("New client connected. Total clients: %d", len(s.clients))
+
+	// Send connection success event
+	if s.onConnectionSuccess != nil {
+		metaData["accepted"] = true
+		_, err := s.onConnectionSuccess(*client)
+		if err != nil {
+			log.Printf("Failed to send connection success event: %v", err)
+		}
+	}
 
 	// Handle messages from this client
 	for {

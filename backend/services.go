@@ -21,6 +21,8 @@ const (
 	BackendActionConnectionRequest BackendActions = "connection_request"
 	BackendActionNewMessage        BackendActions = "new_message"
 	BackendActionDisconnected      BackendActions = "disconnected"
+	BackendActionConnectionSuccess BackendActions = "new_connection"
+	BackendActionError             BackendActions = "error"
 )
 
 // tells if the connection should be accepted or not
@@ -47,21 +49,42 @@ func (s *TCPServer) NewSocketConnection(headers map[string][]string, url string,
 	return response.Params, nil
 }
 
-func (s *TCPServer) HandleMessage(metaData map[string]any, message []byte) {
+func (s *TCPServer) HandleMessage(context map[string]any, message []byte) {
 	requestID := uuid.New().String()
 	s.sendMessage(BackendRequest{
 		RequestID: requestID,
 		Action:    BackendActionNewMessage,
-		Params:    map[string]any{"message": string(message), "metaData": metaData},
+		Params:    map[string]any{"message": string(message), "context": context},
 	})
 }
 
-func (s *TCPServer) HandleDisconnect(metaData map[string]any) {
+func (s *TCPServer) HandleDisconnect(context map[string]any) {
 	requestID := uuid.New().String()
 	s.sendMessage(BackendRequest{
 		RequestID: requestID,
 		Action:    BackendActionDisconnected,
-		Params:    map[string]any{"metaData": metaData},
+		Params:    map[string]any{"context": context},
+	})
+}
+
+func (s *TCPServer) HandleConnectionSuccess(context map[string]any) {
+	requestID := uuid.New().String()
+	s.sendMessage(BackendRequest{
+		RequestID: requestID,
+		Action:    BackendActionConnectionSuccess,
+		Params:    map[string]any{"context": context},
+	})
+}
+
+func (s *TCPServer) HandleError(context map[string]any, errorMessage string) {
+	requestID := uuid.New().String()
+	s.sendMessage(BackendRequest{
+		RequestID: requestID,
+		Action:    BackendActionError,
+		Params: map[string]any{
+			"context": context,
+			"error":   errorMessage,
+		},
 	})
 }
 

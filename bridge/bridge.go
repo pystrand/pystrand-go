@@ -24,15 +24,34 @@ func NewBridge() *Bridge {
 	_backend := backend.NewTCPServer()
 	_backend.WebsocketActions = make(map[backend.ServerActions]func(map[string]any))
 
-	onNewConnection := func(r *http.Request) (map[string]any, error) {
-		return _backend.NewSocketConnection(r.Header, r.URL.Path, r.RemoteAddr)
+	onConnectionRequest := func(r *http.Request) (map[string]any, error) {
+		metaData, err := _backend.NewSocketConnection(r.Header, r.URL.Path, r.RemoteAddr)
+		if err != nil {
+			_backend.HandleError(map[string]any{
+				"headers":     r.Header,
+				"url":         r.URL.Path,
+				"remote_addr": r.RemoteAddr,
+			}, err.Error())
+			return nil, err
+		}
+		return metaData, nil
+	}
+
+	onConnectionSuccess := func(_client client.Client) (map[string]any, error) {
+		clientData := map[string]any{
+			"client_id": _client.ClientID,
+			"room_id":   _client.RoomID,
+			"metadata":  _client.MetaData,
+		}
+		_backend.HandleConnectionSuccess(clientData)
+		return clientData, nil
 	}
 
 	onMessage := func(_client client.Client, message []byte) {
 		clientData := map[string]any{
 			"client_id": _client.ClientID,
 			"room_id":   _client.RoomID,
-			"metaData":  _client.MetaData,
+			"metadata":  _client.MetaData,
 		}
 		_backend.HandleMessage(clientData, message)
 	}
@@ -41,13 +60,14 @@ func NewBridge() *Bridge {
 		clientData := map[string]any{
 			"client_id": _client.ClientID,
 			"room_id":   _client.RoomID,
-			"metaData":  _client.MetaData,
+			"metadata":  _client.MetaData,
 		}
 		_backend.HandleDisconnect(clientData)
 	}
 
 	webSocket := client.NewWebSocketServer(
-		onNewConnection,
+		onConnectionRequest,
+		onConnectionSuccess,
 		onMessage,
 		onDisconnect,
 	)
